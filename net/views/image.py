@@ -362,15 +362,18 @@ def grid_image(req, jobid=None, size='full'):
     return res
 
 def annotated_image(req, jobid=None, size='full'):
+    isSmall = 0
     job = get_object_or_404(Job, pk=jobid)
     ui = job.user_image
     img = ui.image
     if size == 'display':
-        dimg = img.get_display_image(tempfiles=req.tempfiles)
-        scale = float(dimg.width)/img.width
-        img = dimg
+        scale = float(img.get_display_image().width)/img.width
+        img = img.get_display_image()
+        if (scale<0.5): isSmall = 1
     else:
         scale = 1.0
+    logmsg('scale: %f' % scale)
+    logmsg('isSmall: %d' % isSmall)
 
     wcsfn = job.get_wcs_file()
     pnmfn = img.get_pnm_path(tempfiles=req.tempfiles)
@@ -396,20 +399,18 @@ def annotated_image(req, jobid=None, size='full'):
             '--scale %s' % (str(scale)),]
     #if rad < 10.:
     if rad < 1.:
-        #args.append('--uzccat %s' % uzcfn)
-        args.append('--abellcat %s' % abellfn)
-        if hdfn:
-            args.append('--hdcat %s' % hdfn)
+        args.extend([#'--uzccat %s' % uzcfn,
+                     '--abellcat %s' % abellfn,
+                     '--hdcat %s' % hdfn
+                     ])
 
-
-    if rad < 0.25 and tycho2fn:
+    if rad < 0.25:
         args.append('--tycho2cat %s' % tycho2fn)
 
-    #if rad > 20:
-    if rad > 10:
+    if rad > 10 and isSmall: # avoid clutter
         args.append('--no-ngc')
 
-    if rad > 30:
+    if rad > 30 and isSmall: # really  avoid clutter
         args.append('--no-bright')
 
     cmd = ' '.join(args + ['%s %s %s' % (wcsfn, pnmfn, annfn)])
